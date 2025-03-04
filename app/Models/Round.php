@@ -1,0 +1,17 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+class Round extends Model
+{
+    use HasFactory;
+    protected $fillable = ['name_rounds'];
+    // علاقة One to Many مع الأسئلة
+    public function questions()
+    {
+        return $this->hasMany(Question::class);
+    }
+}
