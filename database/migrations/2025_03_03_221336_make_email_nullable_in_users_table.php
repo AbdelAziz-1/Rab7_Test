@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('email')->nullable()->change();
         });
     }
-    
+
     public function down()
     {
         Schema::table('users', function (Blueprint $table) {

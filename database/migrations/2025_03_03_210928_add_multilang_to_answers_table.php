@@ -4,17 +4,15 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
     public function up(): void
     {
         Schema::table('answers', function (Blueprint $table) {
-            $table->text('answer_ar'); 
-            $table->text('answer_en');
-            $table->dropColumn('answer');
+            $table->text('answer_ar')->nullable();
+            $table->text('answer_en')->nullable();
         });
     }
 
@@ -24,7 +22,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('answers', function (Blueprint $table) {
-            //
+            $table->dropColumn('answer_ar');
+            $table->dropColumn('answer_en');
         });
     }
 };

@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -13,13 +12,13 @@ return new class extends Migration
     {
         Schema::create('questions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('category_id')->constrained()->onDelete('cascade'); 
-            $table->string('title_ar');
-            $table->string('title_en');
-            $table->json('options_ar');
-            $table->json('options_en');
-            $table->string('correct_answer_ar');
-            $table->string('correct_answer_en');
+            $table->foreignId('category_id')->constrained()->onDelete('cascade');
+            $table->string('title_ar')->nullable();
+            $table->string('title_en')->nullable();
+            $table->json('options_ar')->nullable();
+            $table->json('options_en')->nullable();
+            $table->string('correct_answer_ar')->nullable();
+            $table->string('correct_answer_en')->nullable();
             $table->timestamps();
         });
     }
