@@ -6,8 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\Round;
 use App\Models\Question;
 class RoundController extends Controller
-{//test 
-    public function index(Request $request)
+{
+    public function getAllRound(Request $request)
     {
         $language = $request->header('Accept-Language', 'en'); // تحديد اللغة من الهيدر، أو الإنجليزية كافتراضي
         
@@ -25,28 +25,61 @@ class RoundController extends Controller
             'rounds' => $rounds
         ]);
     }
-
     // دالة لحساب النقاط لجولة معينة
-    public function calculatePoints(Request $request, $roundId)
-    {
-        $language = $request->header('Accept-Language', 'en');
-        $round = Round::find($roundId);
+public function calculatePoints(Request $request, $roundId)
+{
+    $language = $request->header('Accept-Language', 'en');
 
-        if (!$round) {
-            return response()->json(['message' => $language == 'ar' ? 'الجولة غير موجودة' : 'Round not found'], 404);
-        }
-
-        $questions = Question::where('round_id', $roundId)->get();
-        $totalPoints = $questions->count() * 3;
-
+    $messages = [
+        'round_not_found' => [
+            'en' => 'Round not found',
+            'ar' => 'الجولة غير موجودة',
+        ],
+        'no_answers' => [
+            'en' => 'No answers provided',
+            'ar' => 'لا توجد إجابات مرسلة',
+        ],
+        'points_calculated' => [
+            'en' => 'Points calculated successfully',
+            'ar' => 'تم احتساب النقاط بنجاح',
+        ],
+    ];
+    $round = Round::find($roundId);
+    if (!$round) {
         return response()->json([
-            'round_id' => $roundId,
-            'total_points' => $totalPoints,
-            'message' => $language == 'ar' ? 'تم حساب النقاط بنجاح' : 'Points calculated successfully'
-        ]);
+            'message' => $messages['round_not_found'][$language],
+        ], 404);
+    }
+    $answers = $request->input('answers', []);
+    if (empty($answers)) {
+        return response()->json([
+            'message' => $messages['no_answers'][$language],
+        ], 400);
     }
 
-    public function show(Request $request, $roundId)
+    $questions = Question::where('round_id', $roundId)->get();
+
+    $earnedPoints = 0;
+    $pointsPerQuestion = 3;
+
+    foreach ($questions as $question) {
+        $userAnswer = $answers[$question->id] ?? null;
+
+        if ($userAnswer) {
+            if ($userAnswer == $question->correct_answer) {
+                $earnedPoints += $pointsPerQuestion;
+            }
+        }
+    }
+    return response()->json([
+        'round_id' => $roundId,
+        'earned_points' => $earnedPoints,
+        'total_possible_points' => $questions->count() * $pointsPerQuestion,
+        'message' => $messages['points_calculated'][$language],
+    ]);
+}
+
+    public function getRound(Request $request, $roundId)
     {
         $language = $request->header('Accept-Language', 'en'); // تحديد اللغة (إنجليزي أو عربي)
     
@@ -76,7 +109,8 @@ class RoundController extends Controller
             })
         ]);
     }
-    public function store(Request $request)
+    //store
+    public function createRound(Request $request)
 {
     // التحقق من أن اسم الجولة موجود
     $request->validate([
@@ -96,10 +130,8 @@ class RoundController extends Controller
         $question->round_id = $round->id; // ربط السؤال بالجولة عن طريق تعيين round_id
         $question->save();  // حفظ التغيير في قاعدة البيانات
     }
-
     // حساب النقاط
     $totalPoints = $questions->count() * 3;
-
     return response()->json([
         'message' => 'Round created successfully',
         'name_rounds' => $round->name_rounds,
@@ -119,45 +151,152 @@ class RoundController extends Controller
         })
     ]);
 }
-
-
-    /*public function store(Request $request)
+//عشان اعرف رقم السؤال واتاكد من الاجابة
+public function getRoundQuestions($roundId)
 {
-    // التحقق من صحة البيانات المدخلة للجولة
-    $request->validate([
-       'name_rounds' => 'required|string|max:255',
-       
+    $questions = Question::where('round_id', $roundId)->get();
+    if ($questions->isEmpty()) {
+        return response()->json([
+            'message' => 'لا توجد أسئلة لهذه الجولة'
+        ], 404);
+    }
+    return response()->json([
+        'questions' => $questions
     ]);
+}
+public function submitAnswers(Request $request, $roundId)
+{
+    $language = $request->header('Accept-Language', 'ar');
 
-    // إنشاء الجولة الجديدة
-    $round = Round::create([
-        'name_rounds'=> $request->name,
-        
-    ]);
+    // جلب الجولة
+    $round = Round::find($roundId);
+    if (!$round) {
+        return response()->json([
+            'message' => $language == 'ar' ? 'الجولة غير موجودة' : 'Round not found',
+        ], 404);
+    }
 
-    // اختيار 15 سؤالًا عشوائيًا من الأسئلة الموجودة في قاعدة البيانات
-    $questions = Question::inRandomOrder()->limit(15)->get();
+    // استخراج الإجابات من الطلب
+    $answers = $request->input('answers', []); // يجب أن يكون كود الإرسال بالشكل: {"answers": {"1": "إجابة المستخدم", "2": "إجابة أخرى"}}
 
-    // إضافة الأسئلة المختارة إلى الجولة مع تحديد مدة كل سؤال (7 ثوانٍ)
-    foreach ($questions as $question) {
-        $round->questions()->create([
-            'question_text' => $question->question_text,
-            'choices' => $question->choices,
-            'correct_answer' => $question->correct_answer,
-            'duration' => 7,  
-             
-            'points' => 3, 
-        ]);
+    if (empty($answers)) {
+        return response()->json([
+            'message' => $language == 'ar' ? 'لا توجد إجابات مرسلة' : 'No answers provided',
+        ], 400);
+    }
+
+    // جلب جميع الأسئلة الخاصة بالجولة دفعة واحدة
+    $questions = Question::whereIn('id', array_keys($answers))
+                         ->where('round_id', $roundId)
+                         ->get()
+                         ->keyBy('id'); // تخزينها كمصفوفة مفهرسة بمعرف السؤال
+
+    $earnedPoints = 0;
+    $pointsPerQuestion = 3;
+    $details = [];
+
+    foreach ($answers as $questionId => $userAnswer) {
+        $question = $questions[$questionId] ?? null;
+
+        if ($question) {
+            $isCorrect = $userAnswer == $question->correct_answer;
+
+            if ($isCorrect) {
+                $earnedPoints += $pointsPerQuestion;
+            }
+
+            $details[] = [
+                'question_id' => $question->id,
+                'your_answer' => $userAnswer,
+                'correct_answer' => $question->correct_answer,
+                'status' => $isCorrect
+                    ? ($language == 'ar' ? '✅ صحيحة' : '✅ Correct')
+                    : ($language == 'ar' ? '❌ خاطئة' : '❌ Wrong'),
+            ];
+        } else {
+            $details[] = [
+                'question_id' => $questionId,
+                'your_answer' => $userAnswer,
+                'correct_answer' => null,
+                'status' => $language == 'ar' ? '⚠️ السؤال غير موجود' : '⚠️ Question not found',
+            ];
+        }
     }
 
     return response()->json([
-        'message' => 'Round created successfully with 15 random questions',
-        'round' => $round,
-        'questions' => $questions
-    ], 201); // حالة الاستجابة 201 تعني تم الإنشاء بنجاح
-}*/
-
-
-
-
+        'round_id' => $roundId,
+        'earned_points' => $earnedPoints,
+        'total_possible_points' => count($questions) * $pointsPerQuestion,
+        'details' => $details,
+        'message' => $language == 'ar' ? 'تم احتساب النقاط بنجاح' : 'Points calculated successfully',
+    ]);
 }
+
+   /* public function submitAnswers(Request $request, $roundId)
+    {
+        $language = $request->header('Accept-Language', 'ar');
+        $round = Round::find($roundId);
+        if (!$round) {
+            return response()->json([
+                'message' => $language == 'ar' ? 'الجولة غير موجودة' : 'Round not found',
+            ], 404);
+        }
+        $answers = [];
+        foreach ($request->all() as $key => $value) {
+            if (preg_match('/answers\[(\d+)\]/', $key, $matches)) {
+                $questionId = $matches[1];
+                $answers[$questionId] = $value;
+            }
+        }
+        if (empty($answers)) {
+            return response()->json([
+                'message' => $language == 'ar' ? 'لا توجد إجابات مرسلة' : 'No answers provided',
+            ], 400);
+        }
+
+        $questions = Question::where('round_id', $roundId)->get();
+        $earnedPoints = 0;
+        $pointsPerQuestion = 3;
+        $details = [];
+
+        foreach ($questions as $question) {
+            $userAnswer = $answers[$question->id] ?? null;
+    
+            if ($userAnswer) {
+                $isCorrect = $userAnswer == $question->correct_answer;
+                if ($isCorrect) {
+                    $earnedPoints += $pointsPerQuestion;
+                }
+    
+                $details[] = [
+                    'question_id' => $question->id,
+                    'your_answer' => $userAnswer,
+                    'correct_answer' => $question->correct_answer,
+                    'status' => $isCorrect
+                        ? ($language == 'ar' ? '✅ صحيحة' : '✅ Correct')
+                        : ($language == 'ar' ? '❌ خاطئة' : '❌ Wrong'),
+                ];
+            } else {
+                $details[] = [
+                    'question_id' => $question->id,
+                    'your_answer' => null,
+                    'correct_answer' => $question->correct_answer,
+                    'status' => $language == 'ar' ? '⚠️ لم يتم الإجابة' : '⚠️ Not answered',
+                ];
+            }
+        }
+    
+        return response()->json([
+            'round_id' => $roundId,
+            'earned_points' => $earnedPoints,
+            'total_possible_points' => $questions->count() * $pointsPerQuestion,
+            'details' => $details,
+            'message' => $language == 'ar' ? 'تم احتساب النقاط بنجاح' : 'Points calculated successfully',
+        ]);
+    }*/
+
+};
+//بجيب كل الراوند
+//create round  عشوائي وبياخد اسئلة من داتابيز 
+//get round question بتعرض الاسئلة اللي ف راند بالid بتاع السؤال عشان احطه ف فانشكن submit answer
+//submit answer بحطلها idسؤال,اجابته     وهكذا  كل سؤال وبعدين يعرض لي النقاط الصح والغلط   فtotal points 
